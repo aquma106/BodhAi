@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const { sendOTP, verifyOTP } = require('./otpController');
+const { sendOTP, verifyOTP } = require('./otpController.cjs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;

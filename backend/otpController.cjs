@@ -1,4 +1,4 @@
-const { sendOTPEmail } = require('./emailService');
+const { sendOTPEmail } = require('./emailService.cjs');
 
 // In-memory store for OTPs
 // Structure: otpStore[email] = { otp: "123456", expires: timestamp, attempts: 0 }
