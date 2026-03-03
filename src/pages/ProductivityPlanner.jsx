@@ -58,9 +58,21 @@ function ProductivityPlanner() {
           <h1>Productivity Planner</h1>
           <p>Optimize your learning schedule and stay on track</p>
         </div>
-        <button className="action-btn" onClick={() => setShowForm(!showForm)}>
-          <Plus size={20} /> {showForm ? 'Close' : 'Add Task'}
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="action-btn secondary" onClick={() => {
+            const input = prompt('What is your goal for today?')
+            if (input) {
+              window.dispatchEvent(new CustomEvent('ai-mentor-query', {
+                detail: { user_input: input, mode: 'productivity' }
+              }))
+            }
+          }}>
+            <Sparkles size={18} style={{ marginRight: '8px' }} /> AI Study Plan
+          </button>
+          <button className="action-btn" onClick={() => setShowForm(!showForm)}>
+            <Plus size={20} /> {showForm ? 'Close' : 'Add Task'}
+          </button>
+        </div>
       </header>
 
       <div className="cards-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
