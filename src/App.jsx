@@ -26,7 +26,20 @@ import './styles/App.css'
 
 function MainLayout({ children }) {
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024)
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsSidebarOpen(true)
+      } else {
+        setIsSidebarOpen(false)
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   return (
     <div className={`app ${isAiPanelOpen ? 'ai-panel-open' : ''} ${isSidebarOpen ? 'sidebar-open' : ''}`}>
