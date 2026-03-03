@@ -2,9 +2,11 @@ import React, { useEffect } from 'react'
 import { useState } from 'react'
 import { Send, Sparkles, MoreVertical, Bot, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
+import { useNotifications } from '../context/NotificationContext'
 
 function AIMentorChat({ isOpen, onClose }) {
   const location = useLocation()
+  const { addNotification } = useNotifications()
 
   const [messages, setMessages] = useState(() => {
     try {
@@ -89,11 +91,20 @@ function AIMentorChat({ isOpen, onClose }) {
 
       setIsTyping(false)
       if (data.reply) {
-        setMessages(prev => [...prev, {
+        const newMessage = {
           id: Date.now() + 1,
           role: 'assistant',
           content: data.reply
-        }])
+        }
+        setMessages(prev => [...prev, newMessage])
+
+        // Add notification for AI response
+        const messagePreview = data.reply.substring(0, 80)
+        addNotification({
+          type: 'ai',
+          title: 'AI Mentor replied',
+          message: messagePreview + (data.reply.length > 80 ? '...' : '')
+        })
       } else {
         throw new Error('No reply from AI')
       }
