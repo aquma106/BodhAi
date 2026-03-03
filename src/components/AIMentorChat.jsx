@@ -1,16 +1,21 @@
 import React, { useEffect } from 'react'
 import { useState } from 'react'
-import { Send, Sparkles, MoreVertical, Bot } from 'lucide-react'
+import { Send, Sparkles, MoreVertical, Bot, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 
-function AIMentorChat() {
+function AIMentorChat({ isOpen, onClose }) {
   const location = useLocation()
 
   const [messages, setMessages] = useState(() => {
-    const saved = localStorage.getItem('aiMentorHistory')
-    return saved ? JSON.parse(saved) : [
-      { id: 1, role: 'assistant', content: "Hello Pranav! I'm your AI learning mentor. How can I help you today?" }
-    ]
+    try {
+      const saved = localStorage.getItem('aiMentorHistory')
+      return saved ? JSON.parse(saved) : [
+        { id: 1, role: 'assistant', content: "Hello Pranav! I'm your AI learning mentor. How can I help you today?" }
+      ]
+    } catch (e) {
+      console.error('Error parsing AI mentor history:', e)
+      return [{ id: 1, role: 'assistant', content: "Hello Pranav! I'm your AI learning mentor. How can I help you today?" }]
+    }
   })
 
   const [input, setInput] = useState('')
@@ -18,10 +23,14 @@ function AIMentorChat() {
 
   // Save only last 5 interactions (user + assistant pairs)
   useEffect(() => {
-    // Each interaction is a pair of user and assistant messages
-    // Let's keep the last 10 messages (5 pairs) + the initial greeting
-    const messagesToSave = messages.slice(-11)
-    localStorage.setItem('aiMentorHistory', JSON.stringify(messagesToSave))
+    try {
+      // Each interaction is a pair of user and assistant messages
+      // Let's keep the last 10 messages (5 pairs) + the initial greeting
+      const messagesToSave = messages.slice(-11)
+      localStorage.setItem('aiMentorHistory', JSON.stringify(messagesToSave))
+    } catch (e) {
+      console.error('Error saving AI mentor history:', e)
+    }
   }, [messages])
 
   // Listen for external queries (from pages)
@@ -102,7 +111,7 @@ function AIMentorChat() {
   const quickQuestions = ['Explain recursion', 'Help with React hooks', 'Debug my code', 'Create study plan']
 
   return (
-    <aside className="ai-panel">
+    <aside className={`ai-panel ${isOpen ? 'show' : ''}`}>
       <div className="ai-panel-header">
         <div className="ai-title">
           <div className="ai-avatar"><Sparkles size={16} /></div>
@@ -111,7 +120,10 @@ function AIMentorChat() {
             <span className="status">● Online</span>
           </div>
         </div>
-        <button className="icon-btn"><MoreVertical size={18} /></button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="icon-btn mobile-only" onClick={onClose}><X size={18} /></button>
+          <button className="icon-btn"><MoreVertical size={18} /></button>
+        </div>
       </div>
 
       <div className="ai-panel-content">

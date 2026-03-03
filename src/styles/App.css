@@ -49,6 +49,20 @@ body {
 }
 
 /* Sidebar */
+.ai-toggle-btn {
+  display: none;
+}
+
+.ai-toggle-btn.active {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+@media (max-width: 1200px) {
+  .ai-toggle-btn {
+    display: flex;
+  }
+}
 .sidebar {
   background: rgba(26, 18, 37, 0.8);
   backdrop-filter: blur(10px);
@@ -540,6 +554,11 @@ body {
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-only {
+  display: none;
 }
 
 .ai-panel-header {
@@ -745,9 +764,24 @@ body {
   .app {
     grid-template-columns: 260px 1fr;
   }
-  
+
   .ai-panel {
-    display: none;
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 380px;
+    height: 100vh;
+    z-index: 2000;
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+    background: #1a1225;
+  }
+
+  .ai-panel.show {
+    right: 0;
+  }
+
+  .mobile-only {
+    display: flex;
   }
 }
 

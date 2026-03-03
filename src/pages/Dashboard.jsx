@@ -25,13 +25,22 @@ function Dashboard() {
 
   // History State
   const [history, setHistory] = useState(() => {
-    const saved = localStorage.getItem('dashboardAiHistory')
-    return saved ? JSON.parse(saved) : []
+    try {
+      const saved = localStorage.getItem('dashboardAiHistory')
+      return saved ? JSON.parse(saved) : []
+    } catch (e) {
+      console.error('Error parsing dashboard AI history:', e)
+      return []
+    }
   })
 
   // Save history to localStorage
   useEffect(() => {
-    localStorage.setItem('dashboardAiHistory', JSON.stringify(history.slice(-3)))
+    try {
+      localStorage.setItem('dashboardAiHistory', JSON.stringify(history.slice(-3)))
+    } catch (e) {
+      console.error('Error saving dashboard AI history:', e)
+    }
   }, [history])
 
   const handleAskQuestion = async (e) => {
@@ -78,7 +87,7 @@ function Dashboard() {
     }
   }
 
-  const latestReply = history.length > 0 ? history[0].reply : "Let me explain recursion with a simple example..."
+  const latestReply = history.length > 0 && history[0].reply ? history[0].reply : "Let me explain recursion with a simple example..."
   const previewText = latestReply.length > 80 ? latestReply.substring(0, 80) + '...' : latestReply
 
   return (
