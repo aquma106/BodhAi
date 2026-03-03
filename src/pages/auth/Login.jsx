@@ -16,13 +16,19 @@ const Login = () => {
     setIsLoading(true)
 
     try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
       const response = await fetch('/api/admin-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal
       })
+
+      clearTimeout(timeoutId)
 
       const data = await response.json()
 
@@ -36,7 +42,11 @@ const Login = () => {
       }
     } catch (err) {
       console.error('Admin login error:', err)
-      setError('Unable to connect to server. Please try again.')
+      if (err.name === 'AbortError') {
+        setError('Request timeout. Please check your connection and try again.')
+      } else {
+        setError('Unable to connect to server. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
