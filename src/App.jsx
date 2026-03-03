@@ -26,12 +26,18 @@ import './styles/App.css'
 
 function MainLayout({ children }) {
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   return (
-    <div className={`app ${isAiPanelOpen ? 'ai-panel-open' : ''}`}>
-      <Sidebar />
+    <div className={`app ${isAiPanelOpen ? 'ai-panel-open' : ''} ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <main className="main-content">
-        <Header onToggleAi={() => setIsAiPanelOpen(!isAiPanelOpen)} isAiPanelOpen={isAiPanelOpen} />
+        <Header
+          onToggleAi={() => setIsAiPanelOpen(!isAiPanelOpen)}
+          isAiPanelOpen={isAiPanelOpen}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          isSidebarOpen={isSidebarOpen}
+        />
         {children}
       </main>
       <AIMentorChat isOpen={isAiPanelOpen} onClose={() => setIsAiPanelOpen(false)} />
