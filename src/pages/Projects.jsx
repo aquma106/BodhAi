@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, FolderGit2, Trash2, CheckCircle2, ArrowRight } from 'lucide-react'
+import { useNotifications } from '../context/NotificationContext'
 
 function ProjectCard({ project, onUpdateProgress, onDelete }) {
   return (
@@ -36,6 +37,7 @@ function ProjectCard({ project, onUpdateProgress, onDelete }) {
 }
 
 function Projects() {
+  const { addNotification } = useNotifications()
   const [projects, setProjects] = useState(() => {
     const saved = localStorage.getItem('userProjects')
     return saved ? JSON.parse(saved) : [
@@ -69,7 +71,14 @@ function Projects() {
   const handleUpdateProgress = (id) => {
     setProjects(prev => prev.map(p => {
       if (p.id === id) {
-        return { ...p, progress: Math.min(p.progress + 10, 100) }
+        const newProgress = Math.min(p.progress + 10, 100)
+        // Add notification for project update
+        addNotification({
+          type: 'project',
+          title: 'Project updated',
+          message: `${p.projectName} progress updated to ${newProgress}%`
+        })
+        return { ...p, progress: newProgress }
       }
       return p
     }))

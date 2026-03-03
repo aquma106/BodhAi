@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { CheckCircle2, Circle, Trash2, CalendarCheck, Clock, Plus, Target, Sparkles } from 'lucide-react'
+import { useNotifications } from '../context/NotificationContext'
 
 function ProductivityPlanner() {
+  const { addNotification } = useNotifications()
   const [tasks, setTasks] = useState(() => {
     const saved = localStorage.getItem('productivityTasks')
     return saved ? JSON.parse(saved) : [
@@ -35,7 +37,16 @@ function ProductivityPlanner() {
   const toggleTask = (id) => {
     setTasks(prev => prev.map(t => {
       if (t.id === id) {
-        return { ...t, completed: !t.completed }
+        const isCompleting = !t.completed
+        if (isCompleting) {
+          // Add notification when task is completed
+          addNotification({
+            type: 'task',
+            title: 'Task completed',
+            message: `You completed: ${t.taskTitle}`
+          })
+        }
+        return { ...t, completed: isCompleting }
       }
       return t
     }))
