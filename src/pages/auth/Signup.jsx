@@ -45,6 +45,7 @@ const Signup = () => {
 
     // Signup Process
     const handleProcess = async () => {
+      console.log('Starting signup process for:', email);
       try {
         // 1. Send OTP via backend API
         const response = await fetch('/api/send-otp', {
@@ -53,10 +54,32 @@ const Signup = () => {
           body: JSON.stringify({ email }),
         });
 
+        console.log('Response status:', response.status);
+        const contentType = response.headers.get('content-type');
+        console.log('Response content-type:', contentType);
+
         if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to send verification code');
+          if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to send verification code');
+          } else {
+            const text = await response.text();
+            console.error('Non-JSON error response:', text.substring(0, 200));
+            // If we are in development, we can try to proceed even if the server returns HTML (e.g. proxy error)
+            // But usually this means the backend is down or unreachable.
+            throw new Error('Server error (HTML received). Please check if backend is running on port 5000.');
+          }
         }
+
+        let data;
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          console.error('Expected JSON but got:', text.substring(0, 200));
+          throw new Error('Invalid server response format');
+        }
+        console.log('OTP send response:', data);
 
         // 2. Store temp user data for final account creation after verification
         const tempUser = { name, email, password };

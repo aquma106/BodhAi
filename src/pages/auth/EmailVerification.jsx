@@ -29,15 +29,26 @@ const EmailVerification = () => {
         body: JSON.stringify({ email: tempUser.email, otp }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type');
 
       if (response.ok) {
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          console.log('OTP verification response:', data);
+        }
         setSuccess('Verification successful!')
         setTimeout(() => {
           navigate('/avatar-selection')
         }, 1000)
       } else {
-        setError(data.error || 'Invalid code. Please try again.')
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          setError(data.error || 'Invalid code. Please try again.')
+        } else {
+          const text = await response.text();
+          console.error('Non-JSON error response:', text.substring(0, 200));
+          setError('Server error. Please check server logs.')
+        }
       }
     } catch (err) {
       setError('Connection to server failed. Please try again.')
@@ -54,11 +65,18 @@ const EmailVerification = () => {
         body: JSON.stringify({ email: tempUser.email }),
       });
 
+      const contentType = response.headers.get('content-type');
+
       if (response.ok) {
         setSuccess('A new verification code has been sent!')
         setTimeout(() => setSuccess(''), 5000)
       } else {
-        setError('Failed to resend code. Please try again later.')
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          setError(data.error || 'Failed to resend code.')
+        } else {
+          setError('Failed to resend code. Server error.')
+        }
       }
     } catch (err) {
       setError('Connection failed. Please try again.')
