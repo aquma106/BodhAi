@@ -14,7 +14,10 @@ def create_app():
     
     from app.routes import main
     app.register_blueprint(main)
-    
+
+    from ai_mentor.ai_router import ai_router
+    app.register_blueprint(ai_router)
+
     return app
 
 if __name__ == '__main__':
