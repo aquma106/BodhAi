@@ -129,22 +129,22 @@ function LandingPage({ onGetStarted }) {
       <NeuralBackground />
 
       {/* Navigation */}
-      <nav className="landing-nav">
-        <div className="nav-brand">
-          <div className="nav-logo">
-            <Brain size={28} />
+        <nav className="landing-nav">
+          <div className="nav-brand">
+            <div className="nav-logo">
+              <Brain size={28} />
+            </div>
+            <span>BodhAI</span>
           </div>
-          <span>BodhAI</span>
-        </div>
-        <div className="nav-links">
-          <a href="#features">Features</a>
-          <a href="#how-it-works">How it Works</a>
-          <a href="#testimonials">Testimonials</a>
-        </div>
-        <button className="nav-cta" onClick={onGetStarted}>
-          Get Started <ArrowRight size={16} />
-        </button>
-      </nav>
+          <div className="nav-links">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How it Works</a>
+            <a href="#testimonials">Testimonials</a>
+          </div>
+          <button className="nav-cta" onClick={onGetStarted}>
+            Get Started <ArrowRight size={16} />
+          </button>
+        </nav>
 
       {/* Hero Section */}
       <section className="hero">
