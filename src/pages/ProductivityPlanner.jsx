@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { CheckCircle2, Circle, Trash2, CalendarCheck, Clock, Plus, Target } from 'lucide-react'
+import { CheckCircle2, Circle, Trash2, CalendarCheck, Clock, Plus, Target, Sparkles } from 'lucide-react'
 
 function ProductivityPlanner() {
   const [tasks, setTasks] = useState(() => {
