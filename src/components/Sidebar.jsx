@@ -1,5 +1,5 @@
-import React from "react";
-import { Link, NavLink } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   BookOpen,
@@ -26,8 +26,22 @@ const navItems = [
 ];
 
 function Sidebar({ isOpen, onClose }) {
-  const user = JSON.parse(localStorage.getItem('user')) || {}
-  const isAdmin = user.role === 'admin'
+  const [isAdmin, setIsAdmin] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const userString = localStorage.getItem('user');
+    if (userString) {
+      try {
+        const user = JSON.parse(userString);
+        setIsAdmin(user.role === 'admin');
+      } catch (e) {
+        setIsAdmin(false);
+      }
+    } else {
+      setIsAdmin(false);
+    }
+  }, [location.pathname, isOpen]);
 
   return (
     <>

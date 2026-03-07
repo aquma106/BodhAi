@@ -70,6 +70,10 @@ const Login = () => {
   }
 
   const handleSubmit = (e) => {
+    // Clear previous auth data before logging in
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+
     if (isAdminLogin) {
       handleAdminLogin(e)
     } else {
