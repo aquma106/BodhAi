@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   Settings,
   Brain,
+  ShieldAlert,
   X,
 } from "lucide-react";
 
@@ -25,6 +26,9 @@ const navItems = [
 ];
 
 function Sidebar({ isOpen, onClose }) {
+  const user = JSON.parse(localStorage.getItem('user')) || {}
+  const isAdmin = user.role === 'admin'
+
   return (
     <>
       {isOpen && (
@@ -60,6 +64,19 @@ function Sidebar({ isOpen, onClose }) {
               </NavLink>
             );
           })}
+
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `nav-item admin-nav ${isActive ? "active" : ""}`
+              }
+              onClick={onClose}
+            >
+              <ShieldAlert size={20} />
+              <span>Admin Panel</span>
+            </NavLink>
+          )}
         </nav>
 
         <div className="sidebar-footer">
