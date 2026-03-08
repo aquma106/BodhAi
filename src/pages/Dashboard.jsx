@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Play, MessageCircle, FolderGit2, CheckCircle2, ArrowRight, Clock, Target, X, Send, Sparkles, Loader2, Activity } from 'lucide-react'
 
 function DashboardCard({ title, icon: Icon, children, className = '', gradient = false }) {
@@ -15,6 +16,11 @@ function DashboardCard({ title, icon: Icon, children, className = '', gradient =
 
 function Dashboard() {
   const user = JSON.parse(localStorage.getItem('user')) || { name: 'Learner' }
+  const navigate = useNavigate()
+
+  // API Data State
+  const [learningStats, setLearningStats] = useState(null)
+  const [isStatsLoading, setIsStatsLoading] = useState(true)
 
   // Safe initialization for productivity stats
   const [productivityStats, setProductivityStats] = useState(() => {
@@ -23,16 +29,6 @@ function Dashboard() {
       return saved ? JSON.parse(saved) : { totalTasks: 0, completedTasks: 0, completionRate: 0 }
     } catch {
       return { totalTasks: 0, completedTasks: 0, completionRate: 0 }
-    }
-  })
-
-  // Safe initialization for learning progress
-  const [learningProgress, setLearningProgress] = useState(() => {
-    try {
-      const saved = localStorage.getItem('learningProgress')
-      return saved ? JSON.parse(saved) : {}
-    } catch {
-      return {}
     }
   })
 
@@ -55,6 +51,30 @@ function Dashboard() {
       return []
     }
   })
+
+  // Fetch learning stats from API
+  useEffect(() => {
+    const fetchLearningStats = async () => {
+      try {
+        setIsStatsLoading(true)
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/learning/dashboard', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setLearningStats(data.data)
+        }
+      } catch (err) {
+        console.error('Error fetching learning stats:', err)
+      } finally {
+        setIsStatsLoading(false)
+      }
+    }
+    fetchLearningStats()
+  }, [])
 
   // Calculate completion rate for dynamic subtitle
   const completionRate = useMemo(() => {
@@ -85,9 +105,6 @@ function Dashboard() {
       try {
         const stats = localStorage.getItem('bodhai_productivity_stats')
         if (stats) setProductivityStats(JSON.parse(stats))
-
-        const learning = localStorage.getItem('learningProgress')
-        if (learning) setLearningProgress(JSON.parse(learning))
 
         const userProjects = localStorage.getItem('userProjects')
         if (userProjects) setProjects(JSON.parse(userProjects))
@@ -139,21 +156,21 @@ function Dashboard() {
     }
   }, [completionRate])
 
-  // Get current learning track info
-  const getCurrentLearningTrack = useMemo(() => {
-    const tracks = Object.entries(learningProgress)
-    if (tracks.length === 0) return { title: 'Start a learning track', progress: 0, topic: '' }
-
-    // Find the track with highest progress that's not 100%
-    const activeTrack = tracks.find(([_, progress]) => progress < 100 && progress > 0)
-    if (activeTrack) {
-      return { title: activeTrack[0], progress: activeTrack[1], topic: 'Continue learning' }
+  // Get current learning track info from API stats
+  const currentLearningInfo = useMemo(() => {
+    if (isStatsLoading) return { title: 'Loading...', progress: 0, topic: 'Please wait' }
+    if (!learningStats || !learningStats.current_roadmap) {
+      return { title: 'Start a learning track', progress: 0, topic: 'Visit the Learn page' }
     }
-
-    // If no active track, return the highest progress one
-    const highestTrack = tracks.reduce((max, [key, val]) => val > max[1] ? [key, val] : max, ['', 0])
-    return { title: highestTrack[0] || 'Start learning', progress: highestTrack[1] || 0, topic: highestTrack[1] > 0 ? 'Continue' : 'Start' }
-  }, [learningProgress])
+    const roadmap = learningStats.current_roadmap
+    const nextTopic = learningStats.recommended_next_lesson
+    return { 
+      id: roadmap.id,
+      title: roadmap.title, 
+      progress: roadmap.progress, 
+      topic: nextTopic ? `Next: ${nextTopic.title}` : 'Roadmap complete!' 
+    }
+  }, [learningStats, isStatsLoading])
 
   // Get latest project
   const latestProject = useMemo(() => {
@@ -172,10 +189,12 @@ function Dashboard() {
     setResponse('')
 
     try {
+      const token = localStorage.getItem('token')
       const res = await fetch('/api/ai/mentor', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           mode: "learn",
@@ -236,13 +255,18 @@ function Dashboard() {
           <div className="course-preview">
             <div className="course-image"><span>📚</span></div>
             <div className="course-info">
-              <h4>{getCurrentLearningTrack.title || 'No Track Selected'}</h4>
-              <p>{getCurrentLearningTrack.topic || 'Start learning'}</p>
-              <div className="progress-bar"><div className="progress" style={{width: `${getCurrentLearningTrack.progress}%`}}></div></div>
-              <span className="progress-text">{Math.round(getCurrentLearningTrack.progress)}% complete</span>
+              <h4>{currentLearningInfo.title}</h4>
+              <p>{currentLearningInfo.topic}</p>
+              <div className="progress-bar"><div className="progress" style={{width: `${currentLearningInfo.progress}%`}}></div></div>
+              <span className="progress-text">{Math.round(currentLearningInfo.progress)}% complete</span>
             </div>
           </div>
-          <button className="action-btn">Continue <ArrowRight size={16} /></button>
+          <button 
+            className="action-btn" 
+            onClick={() => currentLearningInfo.id ? navigate(`/learn/roadmap/${currentLearningInfo.id}`) : navigate('/learn')}
+          >
+            {currentLearningInfo.id ? 'Continue' : 'Explore Roadmaps'} <ArrowRight size={16} />
+          </button>
         </DashboardCard>
 
         <DashboardCard title="AI Mentor" icon={MessageCircle} className="mentor-card" gradient={true}>
@@ -267,7 +291,9 @@ function Dashboard() {
               <div><CheckCircle2 size={14} /><span>{Math.round(latestProject.progress)}% done</span></div>
             </div>
           </div>
-          <button className="action-btn">{projects.length > 0 ? 'Open Project' : 'Start First Project'} <ArrowRight size={16} /></button>
+          <button className="action-btn" onClick={() => navigate('/projects')}>
+            {projects.length > 0 ? 'Open Project' : 'Start First Project'} <ArrowRight size={16} />
+          </button>
         </DashboardCard>
 
         <DashboardCard title="Today's Productivity Plan" icon={CheckCircle2} className="productivity-card">

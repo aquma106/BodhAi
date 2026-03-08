@@ -199,6 +199,68 @@ Short motivational advice.
         return prompt
 
     @staticmethod
+    def build_roadmap_prompt(user_input, context):
+        """
+        Build a structured prompt for Roadmap Generation.
+        """
+        goal = context.get('goal', user_input)
+        level = context.get('level', 'beginner')
+        technology = context.get('technology', 'any relevant tech')
+        timeline = context.get('timeline', '3 months')
+
+        prompt = f"""You are BodhAI — an expert Career Coach and Curriculum Designer.
+
+Your task is to generate a comprehensive, structured learning roadmap for a user who wants to achieve: "{goal}".
+
+User Profile:
+- Goal: {goal}
+- Skill Level: {level}
+- Preferred Technology: {technology}
+- Target Timeline: {timeline}
+
+Please provide the roadmap in a structured format that can be easily parsed.
+
+Output Requirements:
+1. Roadmap Title
+2. Total Estimated Time
+3. Learning Phases (at least 3-5 phases)
+4. Topics for each phase (at least 3-5 topics per phase)
+5. A project for each phase or a final capstone project
+6. Level (Beginner/Intermediate/Advanced)
+
+Response Format (MANDATORY):
+
+### 🗺 ROADMAP_TITLE
+[The Title of the Roadmap]
+
+### 📊 METADATA
+- Level: {level}
+- Estimated Duration: [Total time]
+- Track: [backend/frontend/ai/fullstack]
+
+### 📍 PHASES
+
+#### Phase 1: [Phase Title]
+- **Topics**:
+  - [Topic Title]: [Brief Description] (Estimated: [Time])
+  - [Topic Title]: [Brief Description] (Estimated: [Time])
+- **Phase Project**: [Project Title] - [Brief Description]
+
+#### Phase 2: [Phase Title]
+- **Topics**:
+  - [Topic Title]: [Brief Description] (Estimated: [Time])
+  - [Topic Title]: [Brief Description] (Estimated: [Time])
+- **Phase Project**: [Project Title] - [Brief Description]
+
+(Continue for all phases)
+
+### 🚀 CAPSTONE_PROJECT
+[Title]: [Description]
+
+Tailor the complexity to a {level} learner and focus on {technology}."""
+        return prompt
+
+    @staticmethod
     def build_prompt(mode, user_input, context):
         """
         Main prompt builder that routes to appropriate builders based on mode.
@@ -213,13 +275,7 @@ Short motivational advice.
             # Use the new structured code prompt builder
             return PromptBuilder.build_code_prompt(user_input, context)
         elif mode == 'roadmap':
-            return f"""
-                You are an expert AI Career Coach.
-                Mode: Roadmap Generation
-                Context: User is on {current_page} page and is a {user_level} level learner.
-                Task: Generate a step-by-step learning roadmap for the following goal.
-                User Query: {user_input}
-            """
+            return PromptBuilder.build_roadmap_prompt(user_input, context)
         elif mode == 'productivity':
             return PromptBuilder.build_productivity_prompt(user_input, context)
         else:

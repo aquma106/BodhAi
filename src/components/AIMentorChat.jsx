@@ -38,9 +38,9 @@ function AIMentorChat({ isOpen, onClose }) {
   // Listen for external queries (from pages)
   useEffect(() => {
     const handleExternalQuery = (e) => {
-      const { user_input, mode } = e.detail
+      const { user_input, mode, context } = e.detail
       if (user_input) {
-        processAIRequest(user_input, mode)
+        processAIRequest(user_input, mode, context)
       }
     }
 
@@ -63,22 +63,24 @@ function AIMentorChat({ isOpen, onClose }) {
     await processAIRequest(userInput)
   }
 
-  const processAIRequest = async (userInput, customMode = null) => {
+  const processAIRequest = async (userInput, customMode = null, customContext = null) => {
     const userMessage = { id: Date.now(), role: 'user', content: userInput }
     setMessages(prev => [...prev, userMessage])
     setIsTyping(true)
 
     const mode = customMode || getModeFromPath(location.pathname)
-    const context = {
+    const context = customContext || {
       user_level: 'beginner',
       current_page: location.pathname.substring(1) || 'dashboard'
     }
 
     try {
+      const token = localStorage.getItem('token')
       const response = await fetch('/api/ai/mentor', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           mode,

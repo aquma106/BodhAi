@@ -1,324 +1,343 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from app.utils import success_response, error_response, require_auth, not_found_response
+from app.models.learning_model import Roadmap, RoadmapPhase, Topic, LearningProgress
+from ai_mentor.mentor_service import mentor_service
 from datetime import datetime
 import uuid
-
-# Mock in-memory learning progress storage for now
-# In production, this would use a database
-learning_progress_db = {}
+import re
 
 learning_routes = Blueprint('learning', __name__, url_prefix='/api/learning')
 
-
-@learning_routes.route('/progress', methods=['GET'])
+@learning_routes.route('/roadmaps', methods=['GET'])
 @require_auth
-def get_learning_progress():
-    """
-    Get learning progress for current user.
-    
-    Query parameters:
-    - track: Filter by learning track (backend, frontend, ai, fullstack)
-    - topic: Filter by specific topic
-    """
+def get_roadmaps():
+    """Get all learning roadmaps (system + user's custom ones)."""
     try:
+        session = current_app.SessionLocal()
         user_id = request.user_id
         
-        # Get user's learning progress
-        user_progress = [p for p in learning_progress_db.values() 
-                        if p.get('user_id') == user_id]
+        # Get system roadmaps (user_id is null) and user's custom ones
+        roadmaps = session.query(Roadmap).filter(
+            (Roadmap.user_id == None) | (Roadmap.user_id == user_id)
+        ).all()
         
-        # Apply filters
-        track = request.args.get('track')
-        topic = request.args.get('topic')
-        
-        if track:
-            user_progress = [p for p in user_progress if p.get('track') == track]
-        if topic:
-            user_progress = [p for p in user_progress if p.get('topic') == topic]
-        
-        return success_response({
-            'progress': user_progress,
-            'count': len(user_progress)
-        }, 'Learning progress retrieved successfully', 200)
+        roadmap_list = []
+        for roadmap in roadmaps:
+            # Calculate progress for this roadmap
+            phases = session.query(RoadmapPhase).filter_by(roadmap_id=roadmap.id).all()
+            phase_ids = [p.id for p in phases]
+            topics = session.query(Topic).filter(Topic.phase_id.in_(phase_ids)).all()
+            topic_ids = [t.id for t in topics]
+            
+            completed_topics = 0
+            if topic_ids:
+                completed_topics = session.query(LearningProgress).filter(
+                    LearningProgress.user_id == user_id,
+                    LearningProgress.topic_id.in_(topic_ids),
+                    LearningProgress.completed == True
+                ).count()
+                
+            progress = (completed_topics / len(topics) * 100) if topics else 0
+            
+            roadmap_data = {
+                'id': roadmap.id,
+                'title': roadmap.title,
+                'level': roadmap.level,
+                'duration': roadmap.duration,
+                'progress': round(progress, 1),
+                'track': roadmap.track,
+                'is_custom': roadmap.is_custom
+            }
+            roadmap_list.append(roadmap_data)
+            
+        session.close()
+        return success_response(roadmap_list, 'Roadmaps retrieved successfully', 200)
     
     except Exception as e:
-        print(f"Get learning progress error: {e}")
+        print(f"Get roadmaps error: {e}")
         return error_response('server_error', str(e), 500)
 
+@learning_routes.route('/roadmap/<roadmap_id>', methods=['GET'])
+@require_auth
+def get_roadmap_detail(roadmap_id):
+    """Get detailed roadmap including phases and topics."""
+    try:
+        session = current_app.SessionLocal()
+        roadmap = session.query(Roadmap).filter_by(id=roadmap_id).first()
+        
+        if not roadmap:
+            session.close()
+            return not_found_response('Roadmap')
+            
+        user_id = request.user_id
+        data = roadmap.to_dict()
+        
+        # Add progress information for each topic
+        for phase in data['phases']:
+            for topic in phase['topics']:
+                progress = session.query(LearningProgress).filter_by(
+                    user_id=user_id,
+                    topic_id=topic['id']
+                ).first()
+                topic['completed'] = progress.completed if progress else False
+                
+        session.close()
+        return success_response(data, 'Roadmap details retrieved successfully', 200)
+        
+    except Exception as e:
+        print(f"Get roadmap detail error: {e}")
+        return error_response('server_error', str(e), 500)
 
 @learning_routes.route('/progress', methods=['POST'])
 @require_auth
-def create_or_update_learning_progress():
-    """
-    Create or update learning progress.
-    
-    Request body:
-    {
-        "topic": "Python Basics",
-        "track": "backend",
-        "lessons_completed": 5,
-        "practice_exercises_completed": 3,
-        "projects_completed": 1,
-        "total_hours_spent": 20,
-        "progress_percentage": 50
-    }
-    """
+def update_progress():
+    """Update learning progress for a topic."""
     try:
         data = request.get_json()
-        
         if not data:
             return error_response('invalid_request', 'No JSON data provided', 400)
-        
-        topic = data.get('topic', '').strip()
-        track = data.get('track', '').strip()
-        
-        if not topic or not track:
-            return error_response('validation_error', 'Topic and track are required', 422)
-        
+            
+        topic_id = data.get('topic_id')
+        completed = data.get('completed', False)
         user_id = request.user_id
         
-        # Check if progress already exists
-        existing_progress = None
-        for progress in learning_progress_db.values():
-            if (progress.get('user_id') == user_id and 
-                progress.get('topic') == topic and 
-                progress.get('track') == track):
-                existing_progress = progress
-                break
+        if not topic_id:
+            return error_response('validation_error', 'topic_id is required', 422)
+            
+        session = current_app.SessionLocal()
         
-        if existing_progress:
-            # Update existing progress
-            progress_id = existing_progress['id']
-            progress = existing_progress
-            
-            # Update fields
-            progress['lessons_completed'] = data.get('lessons_completed', progress.get('lessons_completed', 0))
-            progress['practice_exercises_completed'] = data.get('practice_exercises_completed', 
-                                                               progress.get('practice_exercises_completed', 0))
-            progress['projects_completed'] = data.get('projects_completed', 
-                                                     progress.get('projects_completed', 0))
-            progress['total_hours_spent'] = data.get('total_hours_spent', 
-                                                    progress.get('total_hours_spent', 0))
-            progress['progress_percentage'] = data.get('progress_percentage', 
-                                                      progress.get('progress_percentage', 0))
-            progress['status'] = data.get('status', progress.get('status', 'in_progress'))
-            progress['updated_at'] = datetime.utcnow().isoformat()
-            
-            message = 'Learning progress updated successfully'
+        # Check if progress exists
+        progress = session.query(LearningProgress).filter_by(
+            user_id=user_id,
+            topic_id=topic_id
+        ).first()
+        
+        if progress:
+            progress.completed = completed
+            if completed:
+                progress.completed_at = datetime.utcnow()
         else:
-            # Create new progress
-            progress_id = str(uuid.uuid4())
-            progress = {
-                'id': progress_id,
-                'user_id': user_id,
-                'topic': topic,
-                'track': track,
-                'lessons_completed': data.get('lessons_completed', 0),
-                'practice_exercises_completed': data.get('practice_exercises_completed', 0),
-                'projects_completed': data.get('projects_completed', 0),
-                'total_hours_spent': data.get('total_hours_spent', 0),
-                'progress_percentage': data.get('progress_percentage', 0),
-                'status': data.get('status', 'in_progress'),
-                'started_at': datetime.utcnow().isoformat(),
-                'updated_at': datetime.utcnow().isoformat(),
-                'completed_at': None
-            }
-            learning_progress_db[progress_id] = progress
-            message = 'Learning progress created successfully'
+            progress = LearningProgress(
+                user_id=user_id,
+                topic_id=topic_id,
+                completed=completed,
+                completed_at=datetime.utcnow() if completed else None
+            )
+            session.add(progress)
+            
+        session.commit()
+        progress_dict = progress.to_dict()
+        session.close()
         
-        return success_response(progress, message, 200 if existing_progress else 201)
-    
+        return success_response(progress_dict, 'Progress updated successfully', 200)
+        
     except Exception as e:
-        print(f"Create/update learning progress error: {e}")
+        print(f"Update progress error: {e}")
         return error_response('server_error', str(e), 500)
 
-
-@learning_routes.route('/progress/<progress_id>', methods=['GET'])
+@learning_routes.route('/dashboard', methods=['GET'])
 @require_auth
-def get_progress_details(progress_id):
-    """Get detailed learning progress for a specific topic."""
+def get_dashboard_stats():
+    """Get summarized learning stats for the dashboard."""
     try:
-        progress = learning_progress_db.get(progress_id)
-        
-        if not progress:
-            return not_found_response('Learning progress')
-        
-        if progress.get('user_id') != request.user_id:
-            return error_response('forbidden', 'You do not have access to this progress', 403)
-        
-        return success_response(progress, 'Progress details retrieved successfully', 200)
-    
-    except Exception as e:
-        print(f"Get progress details error: {e}")
-        return error_response('server_error', str(e), 500)
-
-
-@learning_routes.route('/topics', methods=['GET'])
-@require_auth
-def get_available_topics():
-    """Get list of available learning topics for a track."""
-    try:
-        track = request.args.get('track', 'backend')
-        
-        # Mock list of topics by track
-        topics_by_track = {
-            'backend': [
-                {
-                    'id': 'python-basics',
-                    'title': 'Python Basics',
-                    'description': 'Learn Python fundamentals',
-                    'difficulty': 'beginner',
-                    'estimated_hours': 30
-                },
-                {
-                    'id': 'flask-web-dev',
-                    'title': 'Flask Web Development',
-                    'description': 'Build web apps with Flask',
-                    'difficulty': 'intermediate',
-                    'estimated_hours': 40
-                },
-                {
-                    'id': 'database-design',
-                    'title': 'Database Design',
-                    'description': 'Master SQL and database concepts',
-                    'difficulty': 'intermediate',
-                    'estimated_hours': 35
-                }
-            ],
-            'frontend': [
-                {
-                    'id': 'html-css',
-                    'title': 'HTML & CSS Fundamentals',
-                    'description': 'Master web markup and styling',
-                    'difficulty': 'beginner',
-                    'estimated_hours': 25
-                },
-                {
-                    'id': 'javascript',
-                    'title': 'JavaScript Mastery',
-                    'description': 'Learn JavaScript from basics to advanced',
-                    'difficulty': 'intermediate',
-                    'estimated_hours': 40
-                },
-                {
-                    'id': 'react-dev',
-                    'title': 'React Development',
-                    'description': 'Build modern UIs with React',
-                    'difficulty': 'intermediate',
-                    'estimated_hours': 35
-                }
-            ],
-            'ai': [
-                {
-                    'id': 'ml-basics',
-                    'title': 'Machine Learning Basics',
-                    'description': 'Introduction to ML concepts',
-                    'difficulty': 'beginner',
-                    'estimated_hours': 35
-                },
-                {
-                    'id': 'deep-learning',
-                    'title': 'Deep Learning',
-                    'description': 'Neural networks and deep learning',
-                    'difficulty': 'advanced',
-                    'estimated_hours': 50
-                }
-            ]
-        }
-        
-        topics = topics_by_track.get(track, [])
-        
-        return success_response({
-            'track': track,
-            'topics': topics,
-            'count': len(topics)
-        }, 'Topics retrieved successfully', 200)
-    
-    except Exception as e:
-        print(f"Get topics error: {e}")
-        return error_response('server_error', str(e), 500)
-
-
-@learning_routes.route('/roadmap', methods=['GET'])
-@require_auth
-def get_learning_roadmap():
-    """Get personalized learning roadmap based on user profile."""
-    try:
-        track = request.args.get('track', 'backend')
-        level = request.args.get('level', 'beginner')
-        
-        # Mock roadmap
-        roadmap = {
-            'track': track,
-            'level': level,
-            'stages': [
-                {
-                    'stage': 1,
-                    'title': 'Foundations',
-                    'topics': ['Fundamentals', 'Core Concepts'],
-                    'duration_weeks': 4
-                },
-                {
-                    'stage': 2,
-                    'title': 'Intermediate Skills',
-                    'topics': ['Advanced Topics', 'Best Practices'],
-                    'duration_weeks': 6
-                },
-                {
-                    'stage': 3,
-                    'title': 'Projects & Application',
-                    'topics': ['Real-world Projects', 'Optimization'],
-                    'duration_weeks': 8
-                }
-            ]
-        }
-        
-        return success_response(roadmap, 'Roadmap retrieved successfully', 200)
-    
-    except Exception as e:
-        print(f"Get roadmap error: {e}")
-        return error_response('server_error', str(e), 500)
-
-
-@learning_routes.route('/stats', methods=['GET'])
-@require_auth
-def get_learning_stats():
-    """Get comprehensive learning statistics for the user."""
-    try:
+        session = current_app.SessionLocal()
         user_id = request.user_id
         
-        # Get user's learning progress
-        user_progress = [p for p in learning_progress_db.values() 
-                        if p.get('user_id') == user_id]
+        # Get active roadmaps (those where user has at least one topic in progress or completed)
+        # For simplicity, just get all roadmaps user has access to
+        roadmaps = session.query(Roadmap).filter(
+            (Roadmap.user_id == None) | (Roadmap.user_id == user_id)
+        ).all()
         
-        # Calculate stats
-        total_topics = len(user_progress)
-        completed_topics = len([p for p in user_progress if p.get('status') == 'completed'])
-        total_hours = sum([p.get('total_hours_spent', 0) for p in user_progress])
-        avg_progress = sum([p.get('progress_percentage', 0) for p in user_progress]) / total_topics if total_topics > 0 else 0
+        active_roadmaps = []
+        for roadmap in roadmaps:
+            phases = session.query(RoadmapPhase).filter_by(roadmap_id=roadmap.id).all()
+            phase_ids = [p.id for p in phases]
+            topics = session.query(Topic).filter(Topic.phase_id.in_(phase_ids)).all()
+            topic_ids = [t.id for t in topics]
+            
+            if not topic_ids:
+                continue
+                
+            completed_topics_objs = session.query(LearningProgress).filter(
+                LearningProgress.user_id == user_id,
+                LearningProgress.topic_id.in_(topic_ids),
+                LearningProgress.completed == True
+            ).all()
+            
+            completed_count = len(completed_topics_objs)
+            progress_pct = (completed_count / len(topics) * 100)
+            
+            if completed_count > 0:
+                active_roadmaps.append({
+                    'id': roadmap.id,
+                    'title': roadmap.title,
+                    'progress': round(progress_pct, 1),
+                    'total_topics': len(topics),
+                    'completed_topics': completed_count,
+                    # Next topic to learn
+                    'next_topic': next((t for t in sorted(topics, key=lambda x: x.order) 
+                                     if not any(cp.topic_id == t.id for cp in completed_topics_objs)), None)
+                })
         
-        # Group by track
-        progress_by_track = {}
-        for progress in user_progress:
-            track = progress.get('track', 'unknown')
-            if track not in progress_by_track:
-                progress_by_track[track] = []
-            progress_by_track[track].append(progress)
+        # Sort by progress (highest first but not 100% first)
+        active_roadmaps.sort(key=lambda x: (x['progress'] < 100, x['progress']), reverse=True)
         
-        return success_response({
-            'total_topics': total_topics,
-            'completed_topics': completed_topics,
-            'total_hours_spent': total_hours,
-            'average_progress_percentage': round(avg_progress, 2),
-            'progress_by_track': {
-                track: {
-                    'topics': len(topics),
-                    'avg_progress': round(sum([t.get('progress_percentage', 0) for t in topics]) / len(topics), 2)
-                }
-                for track, topics in progress_by_track.items()
+        current_roadmap = active_roadmaps[0] if active_roadmaps else None
+        
+        # Recommended next lesson
+        recommended = None
+        if current_roadmap and current_roadmap['next_topic']:
+            recommended = {
+                'id': current_roadmap['next_topic'].id,
+                'title': current_roadmap['next_topic'].title,
+                'roadmap_id': current_roadmap['id']
             }
-        }, 'Learning stats retrieved successfully', 200)
-    
+            
+        stats = {
+            'current_roadmap': current_roadmap,
+            'learning_streak': 5, # Mock for now
+            'recommended_next_lesson': recommended,
+            'total_completed_topics': session.query(LearningProgress).filter_by(user_id=user_id, completed=True).count()
+        }
+        
+        session.close()
+        return success_response(stats, 'Dashboard stats retrieved successfully', 200)
+        
     except Exception as e:
-        print(f"Get learning stats error: {e}")
+        print(f"Get dashboard stats error: {e}")
+        return error_response('server_error', str(e), 500)
+
+def parse_roadmap_response(response_text, user_id):
+    """Parses AI markdown response into a Roadmap object."""
+    # This is a basic parser that looks for specific headers
+    # A more robust one would use regex or better structure
+    
+    title_match = re.search(r'### 🗺 ROADMAP_TITLE\n(.*?)\n', response_text)
+    title = title_match.group(1).strip() if title_match else "Custom Roadmap"
+    
+    metadata_match = re.search(r'### 📊 METADATA\n- Level: (.*?)\n- Estimated Duration: (.*?)\n- Track: (.*?)\n', response_text)
+    level = metadata_match.group(1).strip() if metadata_match else "beginner"
+    duration = metadata_match.group(2).strip() if metadata_match else "3 months"
+    track = metadata_match.group(3).strip() if metadata_match else "backend"
+    
+    # Create Roadmap object
+    roadmap = Roadmap(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        title=title,
+        level=level,
+        duration=duration,
+        track=track,
+        is_custom=True
+    )
+    
+    # Extract phases
+    phase_pattern = r'#### Phase (\d+): (.*?)\n(.*?)(?=\n#### Phase|\n###|$)'
+    phases = re.finditer(phase_pattern, response_text, re.DOTALL)
+    
+    roadmap_phases = []
+    for match in phases:
+        phase_num = int(match.group(1))
+        phase_title = match.group(2).strip()
+        phase_content = match.group(3).strip()
+        
+        phase = RoadmapPhase(
+            id=str(uuid.uuid4()),
+            title=phase_title,
+            order=phase_num
+        )
+        
+        # Extract topics
+        topic_pattern = r'- \*\*(.*?)\*\*: (.*?) \(Estimated: (.*?)\)'
+        topics = re.finditer(topic_pattern, phase_content)
+        
+        for i, t_match in enumerate(topics):
+            t_title = t_match.group(1).strip()
+            t_desc = t_match.group(2).strip()
+            t_time = t_match.group(3).strip()
+            
+            topic = Topic(
+                id=str(uuid.uuid4()),
+                title=t_title,
+                description=t_desc,
+                estimated_time=t_time,
+                order=i+1
+            )
+            phase.topics.append(topic)
+            
+        roadmap.phases.append(phase)
+        
+    return roadmap
+
+@learning_routes.route('/roadmaps/generate', methods=['POST'])
+@require_auth
+def generate_roadmap():
+    """Generates a custom roadmap using AI and saves it."""
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('invalid_request', 'No JSON data provided', 400)
+            
+        goal = data.get('goal', 'Software Engineering')
+        level = data.get('level', 'beginner')
+        technology = data.get('technology', 'any')
+        timeline = data.get('timeline', '3 months')
+        
+        user_id = request.user_id
+        
+        # Call AI Mentor
+        response = mentor_service.get_mentor_response(
+            mode='roadmap',
+            user_input=f"Create a roadmap for {goal}",
+            context={
+                'goal': goal,
+                'level': level,
+                'technology': technology,
+                'timeline': timeline
+            }
+        )
+        
+        ai_reply = response.get('reply', '')
+        if not ai_reply or "AI Mentor is temporarily unavailable" in ai_reply:
+            # Fallback mock for demo purposes when AI is unavailable
+            ai_reply = f"""
+### 🗺 ROADMAP_TITLE
+{goal} Path
+
+### 📊 METADATA
+- Level: {level}
+- Estimated Duration: {timeline}
+- Track: backend
+
+### 📍 PHASES
+
+#### Phase 1: Foundations
+- **Getting Started**: Introduction to {technology} and core concepts (Estimated: 2 hours)
+- **Setup**: Configuring your development environment (Estimated: 1 hour)
+- **Basic Syntax**: Learning the fundamentals (Estimated: 4 hours)
+- Phase Project: Initial Setup & Basic App
+
+#### Phase 2: Intermediate Concepts
+- **Advanced Topics**: Deep dive into {technology} features (Estimated: 6 hours)
+- **Best Practices**: Writing clean and efficient code (Estimated: 3 hours)
+- Phase Project: Feature-rich Application
+
+### 🚀 CAPSTONE_PROJECT
+Final Project: A production-ready {goal} application.
+"""
+
+        # Parse and save
+        roadmap = parse_roadmap_response(ai_reply, user_id)
+        
+        session = current_app.SessionLocal()
+        session.add(roadmap)
+        session.commit()
+        roadmap_dict = roadmap.to_dict()
+        session.close()
+        
+        return success_response(roadmap_dict, 'Roadmap generated and saved successfully', 201)
+        
+    except Exception as e:
+        print(f"Generate roadmap error: {e}")
         return error_response('server_error', str(e), 500)
