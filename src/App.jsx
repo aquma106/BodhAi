@@ -17,6 +17,7 @@ import AvatarSelection from './pages/auth/AvatarSelection'
 // Protected Pages
 import Dashboard from './pages/Dashboard'
 import Learn from './pages/Learn'
+import RoadmapDetail from './pages/RoadmapDetail'
 import Projects from './pages/Projects'
 import CodeAssistant from './pages/CodeAssistant'
 import ProductivityPlanner from './pages/ProductivityPlanner'
@@ -87,6 +88,14 @@ function App() {
           <ProtectedRoute>
             <MainLayout>
               <Learn />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/learn/roadmap/:id" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <RoadmapDetail />
             </MainLayout>
           </ProtectedRoute>
         } />
